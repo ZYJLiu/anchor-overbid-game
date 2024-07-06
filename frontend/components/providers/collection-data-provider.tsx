@@ -118,7 +118,7 @@ export function CollectionProvider({
       setError(null);
     } catch (error) {
       console.error("Error processing collection data:", error);
-      setError("Failed to fetch collection data");
+      setError("Failed to fetch collection data, probably rate limited by rpc");
     } finally {
       setIsLoading(false);
     }

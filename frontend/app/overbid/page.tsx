@@ -51,7 +51,8 @@ type Mode = "bid" | "redeem";
 
 export default function BidRedeemPage() {
   const { connection } = useConnection();
-  const { publicKey, signAllTransactions, signTransaction } = useWallet();
+  const { publicKey, connected, signAllTransactions, signTransaction } =
+    useWallet();
   const { getSortedAndFilteredData, isLoading, error } = useCollection();
   const [includeOwned, setIncludeOwned] = useState(false);
   const [sortOption, setSortOption] = useState<SortOption>("overbidHigh");
@@ -272,18 +273,25 @@ export default function BidRedeemPage() {
           </>
         )} */}
       </div>
-      <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-        {processedData.map((item) => (
-          <BidItemCard
-            key={item.mint.toString()}
-            item={item}
-            isSelected={selectedImages.has(item.mint.toString())}
-            onSelect={toggleSelection}
-            onBid={handleBid}
-            mode={mode}
-          />
-        ))}
-      </div>
+      {(mode === "bid" || (mode === "redeem" && connected)) && (
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          {processedData.map((item) => (
+            <BidItemCard
+              key={item.mint.toString()}
+              item={item}
+              isSelected={selectedImages.has(item.mint.toString())}
+              onSelect={toggleSelection}
+              onBid={handleBid}
+              mode={mode}
+            />
+          ))}
+        </div>
+      )}
+      {mode === "redeem" && !connected && (
+        <div className="text-center text-lg">
+          Please connect your wallet to view owned items.
+        </div>
+      )}
       <div className="fixed bottom-0 left-0 right-0 flex justify-center space-x-2 pb-4">
         <Button
           variant="outline"
