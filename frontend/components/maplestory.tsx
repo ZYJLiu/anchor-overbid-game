@@ -4,7 +4,7 @@ import { Button } from "./ui/button";
 import Image from "next/image";
 import Draggable from "react-draggable";
 import { MintButton } from "./mint";
-// import { fetchAllItems } from "@/app/actions";
+import { fetchAllItems } from "@/app/actions";
 
 import * as React from "react";
 import {

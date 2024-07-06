@@ -275,7 +275,7 @@ export default function BidRedeemPage() {
       </div>
       {(mode === "bid" || (mode === "redeem" && connected)) && (
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-          {processedData.map((item) => (
+          {processedData.map((item, index) => (
             <BidItemCard
               key={item.mint.toString()}
               item={item}
@@ -283,6 +283,7 @@ export default function BidRedeemPage() {
               onSelect={toggleSelection}
               onBid={handleBid}
               mode={mode}
+              isPriority={index < 10}
             />
           ))}
         </div>
@@ -328,6 +329,7 @@ interface BidItemCardProps {
   onSelect: (item: { mint: string; owner: string; overbid: number }) => void;
   onBid: (item: CollectionItem, bidAmount: number) => Promise<void>;
   mode: Mode;
+  isPriority: boolean;
 }
 
 function BidItemCard({
@@ -336,6 +338,7 @@ function BidItemCard({
   onSelect,
   onBid,
   mode,
+  isPriority,
 }: BidItemCardProps) {
   const minBidAmount = (Number(item.overbid) + 10000000) / LAMPORTS_PER_SOL;
 
@@ -364,7 +367,7 @@ function BidItemCard({
 
   return (
     <div
-      className="relative w-full cursor-pointer p-2 transition-transform duration-200 ease-in-out hover:scale-105"
+      className="relative w-72 cursor-pointer p-2 transition-transform duration-200 ease-in-out hover:scale-105"
       onClick={handleCardClick}
     >
       <div
@@ -375,9 +378,13 @@ function BidItemCard({
         <div className="relative aspect-square w-full">
           <Image
             alt={item.name}
-            layout="fill"
-            objectFit="cover"
             src={item.image || "/placeholder-image.png"}
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 768px) 256px, (max-width: 1024px) 288px, (max-width: 1280px) 320px, 384px"
+            style={{
+              objectFit: "cover",
+            }}
+            priority={isPriority}
           />
         </div>
         <div className="bg-black bg-opacity-50 p-2 text-white">

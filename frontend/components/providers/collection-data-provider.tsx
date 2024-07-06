@@ -9,7 +9,7 @@ import React, {
   useRef,
 } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { PublicKey } from "@solana/web3.js";
+import { AccountInfo, PublicKey } from "@solana/web3.js";
 import { getTokenMetadata } from "@solana/spl-token";
 import { program, authority, CollectionAccount } from "@/anchor/setup";
 import isEqual from "lodash/isEqual";
@@ -76,61 +76,127 @@ export function CollectionProvider({
   const [allData, setAllData] = useState<CollectionItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const prevDataRef = useRef<CollectionItem[]>([]);
+  const prevDataRef = useRef<{ [key: string]: CollectionItem }>({});
+  const metadataCache = useRef<{ [key: string]: any }>({});
+  const uriCache = useRef<{ [key: string]: UriData }>({});
 
-  const fetchData = useCallback(async () => {
+  const fetchItemMetadata = useCallback(
+    async (mint: PublicKey) => {
+      const mintString = mint.toBase58();
+      let metadata = await getTokenMetadata(connection, mint);
+      metadataCache.current[mintString] = metadata;
+      return metadata;
+    },
+    [connection],
+  );
+
+  const fetchUriData = useCallback(async (uri: string, mintString: string) => {
     try {
-      const data: CollectionAccount =
-        await program.account.collection.fetch(authority);
-
-      const processedItems = await Promise.all(
-        data.items.map(async (item) => {
-          const mint = new PublicKey(item.mint);
-          const metadata = await getTokenMetadata(connection, mint);
-          let uriData: UriData = {};
-          if (metadata?.uri) {
-            try {
-              const response = await fetch(metadata.uri);
-              if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-              }
-              uriData = await response.json();
-            } catch (error) {
-              console.error(`Error fetching URI data for ${item.mint}:`, error);
-            }
-          }
-
-          return {
-            mint: item.mint,
-            points: item.points,
-            name: uriData.name || "",
-            image: uriData.image || "",
-            overbid: Number(metadata?.additionalMetadata[0][1]) || 0,
-            owner: metadata?.additionalMetadata[1][1] || "Unknown",
-          };
-        }),
-      );
-
-      if (!isEqual(processedItems, prevDataRef.current)) {
-        setAllData(processedItems);
-        prevDataRef.current = processedItems;
+      const response = await fetch(uri);
+      if (response.ok) {
+        const uriData = await response.json();
+        uriCache.current[mintString] = uriData;
+        return uriData;
       }
-      setError(null);
     } catch (error) {
-      console.error("Error processing collection data:", error);
-      setError("Failed to fetch collection data, probably rate limited by rpc");
-    } finally {
-      setIsLoading(false);
+      console.error(`Error fetching URI data for ${mintString}:`, error);
     }
-  }, [connection]);
+    return null;
+  }, []);
+
+  const processItem = useCallback(
+    async (item: any) => {
+      const mintString = item.mint.toBase58();
+      const prevItem = prevDataRef.current[mintString];
+      let metadata = metadataCache.current[mintString];
+      let uriData = uriCache.current[mintString];
+
+      if (!prevItem || prevItem.points !== item.points || !metadata) {
+        metadata = await fetchItemMetadata(new PublicKey(item.mint));
+      }
+
+      const newOverbid = Number(metadata?.additionalMetadata[0][1]) || 0;
+      const newOwner = metadata?.additionalMetadata[1][1] || "Unknown";
+
+      if (
+        !prevItem ||
+        prevItem.overbid !== newOverbid ||
+        prevItem.owner !== newOwner ||
+        !uriData
+      ) {
+        if (metadata?.uri && (!uriData || prevItem?.overbid !== newOverbid)) {
+          uriData = await fetchUriData(metadata.uri, mintString);
+        }
+      }
+
+      return {
+        mint: item.mint,
+        points: item.points,
+        name: metadata?.name || "",
+        image: uriData?.image || "",
+        overbid: newOverbid,
+        owner: newOwner,
+      };
+    },
+    [fetchItemMetadata, fetchUriData],
+  );
+
+  const processAccountData = useCallback(
+    async (accountData: CollectionAccount) => {
+      try {
+        const processedItems = await Promise.all(
+          accountData.items.map(processItem),
+        );
+
+        const updatedData = Object.fromEntries(
+          processedItems.map((item) => [item.mint.toBase58(), item]),
+        );
+
+        if (!isEqual(updatedData, prevDataRef.current)) {
+          setAllData(Object.values(updatedData));
+          prevDataRef.current = updatedData;
+        }
+        setError(null);
+      } catch (error) {
+        console.error("Error processing collection data:", error);
+        setError("Failed to process collection data");
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [processItem],
+  );
+
+  const handleAccountChange = useCallback(
+    (accountInfo: AccountInfo<Buffer>) => {
+      try {
+        const decodedData = program.coder.accounts.decode(
+          "collection",
+          accountInfo.data,
+        ) as CollectionAccount;
+        processAccountData(decodedData);
+      } catch (error) {
+        console.error("Error decoding account data:", error);
+        setError("Failed to decode account data");
+      }
+    },
+    [processAccountData],
+  );
 
   useEffect(() => {
-    fetchData();
-    const subscriptionId = connection.onAccountChange(authority, fetchData);
+    // Fetch initial account data
+    program.account.collection.fetch(authority).then(processAccountData);
+
+    // Subscribe to account changes
+    const subscriptionId = connection.onAccountChange(
+      authority,
+      handleAccountChange,
+    );
+
     return () => {
       connection.removeAccountChangeListener(subscriptionId);
     };
-  }, [connection, fetchData]);
+  }, [connection, handleAccountChange, processAccountData]);
 
   //   const getSortedAndFilteredData = useCallback(
   //     (
