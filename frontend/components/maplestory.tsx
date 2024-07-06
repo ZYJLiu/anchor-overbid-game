@@ -331,29 +331,59 @@ export function MapleStory() {
     setCurrentItems((prevItems) => {
       let newItems = { ...prevItems };
       if (isSelected) {
-        randomizeCategory(category, subCategory);
+        if (!newItems[key]) {
+          // Only randomize if the item doesn't already exist
+          const randomItem = getRandomItemForCategory(category, subCategory);
+          if (randomItem) {
+            newItems[key] = {
+              itemId: randomItem.id,
+              region: data.region,
+              version: data.version,
+            };
+          }
+        }
       } else {
         delete newItems[key];
       }
 
-      const requiredItems = [
-        { itemId: character.skin, region: data.region, version: data.version },
-        {
-          itemId: character.skin + 10000,
-          region: data.region,
-          version: data.version,
-        },
-      ];
-
-      const itemsForUrl = [...requiredItems, ...Object.values(newItems)];
-      const params = itemsForUrl
-        .map((item) => encodeURIComponent(JSON.stringify(item)))
-        .join(",");
-      const url = `https://maplestory.io/api/character/${params}/alert/animated?showears=false&showLefEars=false&name=&flipX=false`;
-      setImage(url);
+      // Update image URL
+      updateImageUrl(newItems);
 
       return newItems;
     });
+  }
+
+  function getRandomItemForCategory(category: string, subCategory?: string) {
+    if (allItems && allItems.length > 0) {
+      const filteredItems = filterItemsByCategory(
+        allItems,
+        category,
+        subCategory,
+      );
+      if (filteredItems.length > 0) {
+        const randomIndex = Math.floor(Math.random() * filteredItems.length);
+        return filteredItems[randomIndex];
+      }
+    }
+    return null;
+  }
+
+  function updateImageUrl(items: Record<string, CurrentItem>) {
+    const requiredItems = [
+      { itemId: character.skin, region: data.region, version: data.version },
+      {
+        itemId: character.skin + 10000,
+        region: data.region,
+        version: data.version,
+      },
+    ];
+
+    const itemsForUrl = [...requiredItems, ...Object.values(items)];
+    const params = itemsForUrl
+      .map((item) => encodeURIComponent(JSON.stringify(item)))
+      .join(",");
+    const url = `https://maplestory.io/api/character/${params}/alert/animated?showears=false&showLefEars=false&name=&flipX=false`;
+    setImage(url);
   }
 
   return (

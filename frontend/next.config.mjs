@@ -4,6 +4,7 @@ const nextConfig = {
         domains: ['maplestory.io', 'd1cezapz4mhod6.cloudfront.net'],
       },
     
+      reactStrictMode: false,
 };
 
 export default nextConfig;
